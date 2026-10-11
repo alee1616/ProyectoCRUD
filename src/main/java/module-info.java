@@ -3,6 +3,7 @@ module com.example.proyectocrud {
     requires javafx.fxml;
     requires java.sql;
     requires org.postgresql.jdbc;
+    requires java.desktop;
 
     opens com.example.proyectocrud.controller to javafx.fxml;
     opens com.example.proyectocrud.model to javafx.fxml, javafx.base;
