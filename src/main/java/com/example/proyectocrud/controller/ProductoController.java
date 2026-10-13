@@ -498,8 +498,183 @@ public class ProductoController {
         }
     }
 
+    // Este método está diseñado únicamente para cargar todos los datos del ResultSet utilizado
+    private Producto crearProductoDesdeResultSet(ResultSet rs) throws SQLException {
+        return new Producto(
+                rs.getInt("id_producto"),
+                rs.getString("codigo"),
+                rs.getString("descripcion"),
+                rs.getString("nombre"),
+                rs.getDouble("precio"),
+                rs.getInt("stock"),
+                rs.getDate("fecha_creacion").toLocalDate(),
+                rs.getInt("id_categoria"),
+                rs.getString("nombre_categoria"),
+                rs.getInt("id_marca"),
+                rs.getString("nombre_marca"),
+                1
+        );
+    }
 
-    
+    @FXML
+    private void onBuscarAction() {
+
+        listaProductos.clear();
+
+        StringBuilder sql = new StringBuilder("""
+                SELECT
+                    p.id_producto,
+                    p.codigo,
+                    p.nombre,
+                    p.descripcion,
+                    p.precio,
+                    p.stock,
+                    p.fecha_creacion,
+                    c.id_categoria,
+                    c.nombre AS nombre_categoria,
+                    m.id_marca,
+                    m.nombre AS nombre_marca,
+                    p.estado
+                FROM catalogo.productos p
+                INNER JOIN catalogo.categorias c
+                    ON p.id_categoria = c.id_categoria
+                INNER JOIN catalogo.marcas m
+                    ON p.id_marca = m.id_marca
+                WHERE p.estado = 1
+                """);
+
+        java.util.List<Object> parametros = new java.util.ArrayList<>();
+
+        // 1. Filtro por código o por nombre (con tu control txtBuscarCodigoNombre)
+        String texto = txtBuscarCodigoNombre.getText().trim();
+
+        if (!texto.isBlank()) {
+            sql.append("""
+                    AND (
+                        p.codigo ILIKE ?
+                        OR p.nombre ILIKE ?
+                    )
+                    """);
+            parametros.add("%" + texto + "%");
+            parametros.add("%" + texto + "%");
+        }
+
+        // 2. Filtro por categoría (con tu control cmbBuscarCategoria)
+        if (cmbBuscarCategoria.getValue() != null) {
+            sql.append("""
+                    AND p.id_categoria = ?
+                    """);
+            parametros.add(cmbBuscarCategoria.getValue().getIdCategoria());
+        }
+
+        // 3. Filtro por fecha desde (con tu control dpBuscarDesde)
+        LocalDate fechaDesde = dpBuscarDesde.getValue();
+
+        if (fechaDesde != null) {
+            sql.append("""
+                    AND p.fecha_creacion >= ?
+                    """);
+            parametros.add(fechaDesde);
+        }
+
+        // 4. Filtro por fecha hasta (con tu control dpBuscarHasta)
+        LocalDate fechaHasta = dpBuscarHasta.getValue();
+
+        if (fechaHasta != null) {
+            sql.append("""
+                    AND p.fecha_creacion <= ?
+                    """);
+            parametros.add(fechaHasta);
+        }
+
+        // Verificamos que las fechas tengan sentido
+        if (fechaDesde != null && fechaHasta != null && fechaDesde.isAfter(fechaHasta)) {
+            mostrarAlerta(
+                    Alert.AlertType.WARNING,
+                    "Rango de fechas incorrecto",
+                    "La fecha inicial no puede ser posterior a la fecha final."
+            );
+            return;
+        }
+
+        // 5. Filtro por precio mínimo y máximo (con tus controles txtBuscarPrecioMin y Max)
+        String precioMinTxt = txtBuscarPrecioMin.getText().trim();
+        if (!precioMinTxt.isBlank()) {
+            sql.append("""
+                    AND p.precio >= ?
+                    """);
+            parametros.add(new java.math.BigDecimal(precioMinTxt));
+        }
+
+        String precioMaxTxt = txtBuscarPrecioMax.getText().trim();
+        if (!precioMaxTxt.isBlank()) {
+            sql.append("""
+                    AND p.precio <= ?
+                    """);
+            parametros.add(new java.math.BigDecimal(precioMaxTxt));
+        }
+
+        // 6. Filtro de solo existencias (con tu control chkSoloExistencias)
+        if (chkSoloExistencias.isSelected()) {
+            sql.append("""
+                    AND p.stock > 0
+                    """);
+        }
+
+        // 7. Aplicación del ORDER BY (con tu control cmbOrdenarPor)
+        String orden = cmbOrdenarPor.getValue();
+
+        if (orden == null) {
+            orden = "Nombre";
+        }
+
+        switch (orden.trim()) {
+            case "Precio menor a mayor" -> sql.append("\nORDER BY p.precio ASC");
+            case "Precio mayor a menor" -> sql.append("\nORDER BY p.precio DESC");
+            case "Fecha más reciente" -> sql.append("\nORDER BY p.fecha_creacion DESC");
+            case "Fecha más antigua" -> sql.append("\nORDER BY p.fecha_creacion ASC");
+            case "Stock mayor a menor" -> sql.append("\nORDER BY p.stock DESC");
+            case "Stock menor a mayor", "Stock mwnor a mayor" -> sql.append("\nORDER BY p.stock ASC");
+            default -> sql.append("\nORDER BY p.nombre ASC");
+        }
+
+        // Ejecución de la consulta
+        try (
+                Connection conexion = ConexionBD.getConnection();
+                PreparedStatement ps = conexion.prepareStatement(sql.toString())
+        ) {
+
+            for (int i = 0; i < parametros.size(); i++) {
+                Object valor = parametros.get(i);
+
+                if (valor instanceof LocalDate fecha) {
+                    ps.setDate(i + 1, java.sql.Date.valueOf(fecha));
+                } else if (valor instanceof java.math.BigDecimal numero) {
+                    ps.setBigDecimal(i + 1, numero);
+                } else {
+                    ps.setObject(i + 1, valor);
+                }
+            }
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    listaProductos.add(crearProductoDesdeResultSet(rs));
+                }
+            }
+
+            tblProductos.setItems(listaProductos);
+
+            if (listaProductos.isEmpty()) {
+                mostrarAlerta(
+                        Alert.AlertType.INFORMATION,
+                        "Sin resultados",
+                        "No existen productos que coincidan con los filtros aplicados."
+                );
+            }
+        } catch (SQLException e) {
+            mostrarErrorBaseDatos("No se pudo realizar la búsqueda.", e);
+        }
+    }
 
     //  Métodos OnAction
 
@@ -520,9 +695,7 @@ public class ProductoController {
     void onEliminar(ActionEvent event) {
     }
 
-    @FXML
-    void onBuscarAction(ActionEvent event) {
-    }
+
 
     @FXML
     void onLimpiarFiltrosAction(ActionEvent event) {
