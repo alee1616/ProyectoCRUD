@@ -123,8 +123,12 @@ public class ProductoController {
 
     @FXML
     public void initialize(){
-        //Configuración TableView
-
+        configurarTableView();
+        configurarSeleccionTableView();
+        cargarOpcionesOrden();
+        cargarCategorias();
+        cargarMarcas();
+        cargarProductos();
     }
 
     private void configurarTableView() {
@@ -245,13 +249,13 @@ public class ProductoController {
             cmbCategoria.setItems(FXCollections.observableArrayList(listaCategorias));
             cmbBuscarCategoria.setItems(FXCollections.observableArrayList(listaCategorias));
 
-            // Falta este bloque catch para solucionar el error
         } catch (SQLException e) {
             mostrarErrorBaseDatos(
                     "No se pudieron cargar las categorías desde la base de datos.", e
             );
         }
     }
+
 
     /**
      * Consulta las marcas activas de la base de datos para mostrarlas dentro del comboBox
@@ -286,7 +290,7 @@ public class ProductoController {
 
 
     /**
-     *
+     * Recibe como parametro un producto sellecionado del TbleView
      *
      */
 
@@ -431,12 +435,22 @@ public class ProductoController {
     }
 
     private void limpiarFormulario() {
+        txtCodigo.clear();
+        txtNombre.clear();
+        txtDescripcion.clear();
+        txtPrecio.clear();
+        txtStock.clear();
+        cmbCategoria.setValue(null);
+        cmbMarca.setValue(null);
+        dpFecha.setValue(null);
     }
 
     private boolean existeCodigo(String codigo, Object o) {
+        return false;
     }
 
     private boolean validarFormulario() {
+        return true;
     }
 
     private void cargarProductos() {
@@ -495,6 +509,7 @@ public class ProductoController {
 
     @FXML
     void onGuardar(ActionEvent event) {
+        guardarProducto();
     }
 
     @FXML
